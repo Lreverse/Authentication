@@ -6,6 +6,7 @@ from socket import *
 
 class tcpClient(object):
     """tcp客户端"""
+
     def __init__(self, ip, port, buffer_size):
         self.ip = ip
         self.port = port
@@ -31,6 +32,7 @@ class tcpClient(object):
 
 class tcpServer(object):
     """tcp服务器端"""
+
     def __init__(self, ip, port, buffer_size):
         self.ip = ip
         self.port = port
@@ -38,6 +40,8 @@ class tcpServer(object):
         self.socket = None
         self.accept_socket = None
         self.client_addr = None
+        self.username = None  # 当前连接的用户名
+        self.hash1 = None  # 当前连接的用户的密码散列值
 
     def bind(self):
         self.socket = socket(AF_INET, SOCK_STREAM)

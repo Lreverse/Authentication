@@ -9,6 +9,7 @@ import json
 import wx
 import binascii
 import datetime
+from Crypto.Util.Padding import pad, unpad
 
 SERVER_IP = "127.0.0.1"
 PORT = 8888
@@ -24,17 +25,17 @@ class User(object):
         self.pwd = pwd
         self.hash1 = encrypt.hash_md5(username.encode(), pwd.encode())
         self.mac = binascii.hexlify(os.urandom(MAC_LENGTH)).decode()  # 生成认证码(转成16进制)
-        self.hash2 = encrypt.hash_salt(self.mac.encode(), self.hash1.encode())
+        self.hash2 = encrypt.hash_salt(self.hash1.encode(), self.mac.encode())
 
 
 def login_handle(user):
-    """登录认证"""
+    """登录认证处理函数"""
     # 发送登录请求
     rq = packet.login_rq(user.username, user.mac, user.hash2)
     send_data = json.dumps(rq)  # 序列化
     client.send(send_data)
 
-    # 接收登录请求的响应
+    # 接收响应
     recv_data = client.recv()
     rs = json.loads(recv_data)  # 反序列化
     pack_type = rs["type"]
@@ -44,8 +45,10 @@ def login_handle(user):
             cipher_byte = binascii.unhexlify(cipher.encode())
             hash1_byte = binascii.unhexlify(user.hash1.encode())
             mac = encrypt.AES_Decode(hash1_byte, cipher_byte)
-            with open('client_access.log', 'a') as f:
-                print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username, file=f)  # 写入文件
+            if mac == user.mac:
+                with open('client_access.log', 'a') as f:
+                    print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username,
+                          file=f)  # 写入文件
             return True, ""
         case packet.LOGIN_RS_ERROR:
             msg = rs["msg"]
@@ -57,38 +60,36 @@ def login_handle(user):
             return False, msg
 
 
-def register_handle(user):
+def register_handle():
     pass
 
 
-def change_pwd_handle(user):
-    """登录认证"""
-    # 发送登录请求
-    rq = packet.login_rq(user.username, user.mac, user.hash2)
+def change_pwd_handle(username: str, new_pwd: str, key: str):
+    """修改密码处理函数"""
+    new_hash1 = encrypt.hash_md5(username.encode(), new_pwd.encode())
+    new_hash1_byte = binascii.unhexlify(new_hash1.encode())
+    key_byte = binascii.unhexlify(key.encode())
+    new_cipher = encrypt.AES_Encode(key_byte, new_hash1_byte)
+    new_hash2 = encrypt.hash_salt(key.encode(), new_cipher.encode())
+
+    # 发送更改密码请求
+    rq = packet.change_pwd_rq(new_cipher, new_hash2)
     send_data = json.dumps(rq)  # 序列化
     client.send(send_data)
 
-    # 接收登录请求的响应
+    # 接收响应
     recv_data = client.recv()
     rs = json.loads(recv_data)  # 反序列化
     pack_type = rs["type"]
     match pack_type:
-        case packet.LOGIN_RS_SUCCESS:
-            cipher = rs["cipher"]
-            cipher_byte = binascii.unhexlify(cipher.encode())
-            hash1_byte = binascii.unhexlify(user.hash1.encode())
-            mac = encrypt.AES_Decode(hash1_byte, cipher_byte)
-            with open('client_access.log', 'a') as f:
-                print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username, file=f)  # 写入文件
+        case packet.CHANGE_PWD_RS_SUCCESS:
+            print("change success")
             return True, ""
-        case packet.LOGIN_RS_ERROR:
-            msg = rs["msg"]
-            # print(msg)
-            return False, msg
+        case packet.CHANGE_PWD_RS_ERROR:
+            print("error")
+            return False, "error"
         case _:
-            msg = "packet error"
-            # print(msg)
-            return False, msg
+            pass
 
 
 class IndexPanel(wx.Panel):
@@ -224,7 +225,7 @@ class SuccessPanel(wx.Panel):
         self.Hide()
 
     def on_change_pwd(self, event=None):
-        self.parent.change_pwd_panel.username = self.parent
+        self.parent.change_pwd_panel.username = self.username
         self.parent.change_pwd_panel.hash1 = self.hash1
         self.Hide()
         self.parent.change_pwd_panel.Show()
@@ -247,7 +248,8 @@ class ChangePwdPanel(wx.Panel):
                                   style=wx.ALIGN_CENTRE_HORIZONTAL)
         wx.StaticText(self, -1, "password", pos=(60, 70))
         wx.StaticText(self, -1, "confirm", pos=(60, 110))
-        self.password = wx.TextCtrl(self, -1, '', pos=(140, 70), size=(175, -1), style=wx.TE_CENTER | wx.TE_PASSWORD)
+        self.new_password = wx.TextCtrl(self, -1, '', pos=(140, 70), size=(175, -1),
+                                        style=wx.TE_CENTER | wx.TE_PASSWORD)
         self.confirm = wx.TextCtrl(self, -1, '', pos=(140, 110), size=(175, -1), style=wx.TE_CENTER | wx.TE_PASSWORD)
         self.submit_btn = wx.Button(self, -1, label="submit", pos=(140, 155))
         self.back_btn = wx.Button(self, -1, label="back", pos=(240, 155))
@@ -258,17 +260,18 @@ class ChangePwdPanel(wx.Panel):
 
     # 向服务器发送登录请求
     def on_submit(self, event=None):
-        password = self.password.GetValue()
-        # user = User(self.username, password)
-        # change_pwd_handle(user)
-        # 不需要重新生成用户，只需要把hash1当作密钥进行AES加密
+        new_pwd = self.new_password.GetValue()
+        flag, msg = change_pwd_handle(self.username, new_pwd, self.hash1)
 
         # 提交成功
-        self.password.SetValue("")
+        self.new_password.SetValue("")
         self.confirm.SetValue("")
-        self.Hide()
-        self.parent.success_panel.Show()
-        self.parent.Layout()
+        if flag:
+            self.Hide()
+            self.parent.success_panel.Show()
+            self.parent.Layout()
+        else:
+            pass
 
     # 返回到主界面
     def on_back(self, event=None):

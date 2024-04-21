@@ -9,7 +9,8 @@ LOGIN_RS_ERROR = base + 3
 REGISTER_RQ = base + 4
 REGISTER_RS = base + 5
 CHANGE_PWD_RQ = base + 6
-CHANGE_PWD_RS = base + 7
+CHANGE_PWD_RS_SUCCESS = base + 7
+CHANGE_PWD_RS_ERROR = base + 8
 
 
 def exit_rq():
@@ -40,6 +41,30 @@ def login_rs_success(cipher):
 def login_rs_error(msg=""):
     packet = {
         "type": LOGIN_RS_ERROR,
+        "msg": msg
+    }
+    return packet
+
+
+def change_pwd_rq(new_cipher, new_hash2):
+    packet = {
+        "type": CHANGE_PWD_RQ,
+        "new_cipher": new_cipher,
+        "new_hash2": new_hash2
+    }
+    return packet
+
+
+def change_pwd_rs_success():
+    packet = {
+        "type": CHANGE_PWD_RS_SUCCESS
+    }
+    return packet
+
+
+def change_pwd_rs_error(msg=""):
+    packet = {
+        "type": CHANGE_PWD_RS_ERROR,
         "msg": msg
     }
     return packet
