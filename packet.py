@@ -7,10 +7,11 @@ LOGIN_RQ = base + 1
 LOGIN_RS_SUCCESS = base + 2
 LOGIN_RS_ERROR = base + 3
 REGISTER_RQ = base + 4
-REGISTER_RS = base + 5
-CHANGE_PWD_RQ = base + 6
-CHANGE_PWD_RS_SUCCESS = base + 7
-CHANGE_PWD_RS_ERROR = base + 8
+REGISTER_RS_SUCCESS = base + 5
+REGISTER_RS_ERROR = base + 6
+CHANGE_PWD_RQ = base + 7
+CHANGE_PWD_RS_SUCCESS = base + 8
+CHANGE_PWD_RS_ERROR = base + 9
 
 
 def exit_rq():
@@ -41,6 +42,29 @@ def login_rs_success(cipher):
 def login_rs_error(msg=""):
     packet = {
         "type": LOGIN_RS_ERROR,
+        "msg": msg
+    }
+    return packet
+
+
+def register_rq(reg_code):
+    packet = {
+        "type": REGISTER_RQ,
+        "reg_code": reg_code
+    }
+    return packet
+
+
+def register_rs_success():
+    packet = {
+        "type": REGISTER_RS_SUCCESS,
+    }
+    return packet
+
+
+def register_rs_error(msg=""):
+    packet = {
+        "type": REGISTER_RS_ERROR,
         "msg": msg
     }
     return packet

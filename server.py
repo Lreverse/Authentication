@@ -57,7 +57,7 @@ def login_handle(data):
         print(f">  error: {e}")
 
     if not result:
-        rs = packet.login_rs_error("user not exit")
+        rs = packet.login_rs_error("user not exists")
     else:
         server.username = result[0][1]
         server.hash1 = result[0][2]
@@ -78,7 +78,44 @@ def login_handle(data):
 
 
 def register_handle(data):
-    pass
+    """处理注册请求"""
+    print(">  register_rq", data)
+    reg_code = data["reg_code"]
+
+    # rsa解密
+    reg_code_byte = binascii.unhexlify(reg_code.encode())
+    reg_decode = encrypt.rsa_decode(reg_code_byte, "./server_key/private.pem")
+    reg_info = reg_decode.split(":")
+    username = reg_info[0]
+    hash1 = reg_info[1]
+
+    # 查询数据库中是否已存在该用户
+    cursor = db.cursor()
+    sql = f"select * from users where username ='{username}'"
+    try:
+        cursor.execute(sql)
+        result = cursor.fetchall()
+    except Exception as e:
+        print(f">  error: {e}")
+
+    if not result:
+        # 不存在该用户，可以插入
+        sql = f"insert into users (username, password) values ('{username}', '{hash1}')"
+        try:
+            db.begin()
+            cursor.execute(sql)
+            db.commit()
+            rs = packet.register_rs_success()
+        except Exception as e:
+            db.rollback()
+            print(f">  error: {e}")
+            rs = packet.register_rs_error(e)
+    else:
+        # 存在该用户
+        rs = packet.register_rs_error("user already exists")
+    response_data = json.dumps(rs)
+    server.send(response_data)
+
 
 
 def change_pwd_handle(data):
@@ -98,6 +135,7 @@ def change_pwd_handle(data):
         cursor = db.cursor()
         sql = f"update users set password = '{new_hash1}' where username = '{server.username}'"
         try:
+            db.begin()
             cursor.execute(sql)
             db.commit()
             rs = packet.change_pwd_rs_success()
@@ -117,7 +155,7 @@ if __name__ == '__main__':
     server.listen()
     while True:
         server.accept()
-        server.send("Welcome to Lyp's server")
+        # server.send("Welcome to Lyp's server")
         while True:
             recv_data = server.recv()
             flag = deal_data(recv_data)

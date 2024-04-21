@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from tcp import *
+import socket
 import packet
 import encrypt
 import os
@@ -59,8 +60,31 @@ def login_handle(user):
             return False, msg
 
 
-def register_handle():
-    pass
+def register_handle(username, password):
+    """注册处理函数"""
+    hash1 = encrypt.hash_md5(username.encode(), password.encode())
+    reg_code = encrypt.rsa_encode(f"{username}:{hash1}".encode(), "./server_key/public.pem")
+
+    # 发送注册请求
+    rq = packet.register_rq(reg_code)
+    send_data = json.dumps(rq)  # 序列化
+    client.send(send_data)
+
+    # 接收响应
+    recv_data = client.recv()
+    rs = json.loads(recv_data)
+    pack_type = rs["type"]
+    match pack_type:
+        case packet.REGISTER_RS_SUCCESS:
+            print("register success")
+            return True, ""
+        case packet.REGISTER_RS_ERROR:
+            print("register error")
+            msg = rs["msg"]
+            return False, msg
+        case _:
+            msg = "packet error"
+            return False, msg
 
 
 def change_pwd_handle(username: str, new_pwd: str, key: str):
@@ -141,32 +165,46 @@ class LoginPanel(wx.Panel):
 
     # 向服务器发送登录请求
     def on_login(self, event):
-        # 启动tcp客户端
-        global client
-        client = tcpClient(SERVER_IP, PORT, BUFFER_SIZE)
-        client.connect()
-        print("> ", client.recv())
-
         # 获取用户名密码并发送登录请求
         username = self.username.GetValue()
         password = self.password.GetValue()
-        user = User(username, password)
-        flag, msg = login_handle(user)
-        self.username.SetValue("")  # 重置输入框
-        self.password.SetValue("")  # 重置输入框
-        if flag:
-            # 发送成功
-            self.parent.success_panel.username = username
-            self.parent.success_panel.hash1 = user.hash1
-            self.parent.success_panel.info.SetLabel(f"Hello ^_^  {username}")
-            self.Hide()
-            self.parent.success_panel.Show()
-            self.parent.Layout()
+        if username == "":
+            wx.MessageBox("username is empty!", "alert", wx.OK | wx.ICON_WARNING)
+        elif password == "":
+            wx.MessageBox("password is empty!", "alert", wx.OK | wx.ICON_WARNING)
         else:
-            # 发送失败，结束tcp连接
-            client.send(json.dumps(packet.exit_rq()))
-            client.close()
-            wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
+            # 启动tcp客户端
+            global client
+            client = tcpClient(SERVER_IP, PORT, BUFFER_SIZE)
+            try:
+                client.connect()
+            except socket.error as e:  # 处理无法连接服务器的异常
+                print(">  server error")
+                wx.MessageBox(f"{e}", "alert", wx.OK | wx.ICON_ERROR)
+                client.close()
+                client = None
+                return False
+            # print("> ", client.recv())
+
+            user = User(username, password)
+            flag, msg = login_handle(user)
+            self.username.SetValue("")  # 重置输入框
+            self.password.SetValue("")  # 重置输入框
+            if flag:
+                # 发送成功
+                wx.MessageBox("login success!", "success", wx.OK | wx.ICON_INFORMATION)
+                self.parent.success_panel.username = username
+                self.parent.success_panel.hash1 = user.hash1
+                self.parent.success_panel.info.SetLabel(f"Hello ^_^  {username}")
+                self.Hide()
+                self.parent.success_panel.Show()
+                self.parent.Layout()
+            else:
+                # 发送失败，结束tcp连接
+                client.send(json.dumps(packet.exit_rq()))
+                client.close()
+                wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
+            return True
 
     # 返回到主界面
     def on_back(self, event):
@@ -185,10 +223,10 @@ class RegisterPanel(wx.Panel):
         # 控件
         wx.StaticText(self, -1, "username", pos=(60, 30))
         wx.StaticText(self, -1, "password", pos=(60, 70))
-        wx.StaticText(self, -1, "phone NO", pos=(60, 110))
+        wx.StaticText(self, -1, "confirm", pos=(60, 110))
         self.username = wx.TextCtrl(self, -1, '', pos=(140, 30), size=(175, -1), style=wx.TE_CENTER)
         self.password = wx.TextCtrl(self, -1, '', pos=(140, 70), size=(175, -1), style=wx.TE_CENTER | wx.TE_PASSWORD)
-        self.phone_no = wx.TextCtrl(self, -1, '', pos=(140, 110), size=(175, -1), style=wx.TE_CENTER)
+        self.confirm = wx.TextCtrl(self, -1, '', pos=(140, 110), size=(175, -1), style=wx.TE_CENTER | wx.TE_PASSWORD)
         self.login_btn = wx.Button(self, -1, label="register", pos=(140, 155))
         self.back_btn = wx.Button(self, -1, label="back", pos=(240, 155))
         self.Hide()
@@ -197,9 +235,48 @@ class RegisterPanel(wx.Panel):
         self.back_btn.Bind(wx.EVT_BUTTON, self.on_back)
 
     def on_register(self, event=None):
-        self.username.SetValue("")
-        self.password.SetValue("")
-        self.phone_no.SetValue("")
+        username = self.username.GetValue()
+        password = self.password.GetValue()
+        confirm = self.confirm.GetValue()
+        if username == "":
+            wx.MessageBox("username is empty!", "alert", wx.OK | wx.ICON_WARNING)
+        elif password == "":
+            wx.MessageBox("password is empty!", "alert", wx.OK | wx.ICON_WARNING)
+        elif confirm == "":
+            wx.MessageBox("confirm is empty!", "alert", wx.OK | wx.ICON_WARNING)
+        elif password != confirm:
+            wx.MessageBox("confirm is wrong!", "alert", wx.OK | wx.ICON_WARNING)
+        else:
+            self.username.SetValue("")
+            self.password.SetValue("")
+            self.confirm.SetValue("")
+
+            # 启动tcp客户端
+            global client
+            client = tcpClient(SERVER_IP, PORT, BUFFER_SIZE)
+            try:
+                client.connect()
+            except socket.error as e:  # 处理无法连接服务器的异常
+                print(">  server error")
+                wx.MessageBox(f"{e}", "alert", wx.OK | wx.ICON_ERROR)
+                client.close()
+                client = None
+                return False
+
+            flag, msg = register_handle(username, password)
+            if flag:
+                wx.MessageBox("register success!", "success", wx.OK | wx.ICON_INFORMATION)
+                self.Hide()
+                self.parent.index_panel.Show()
+                self.parent.Layout()
+            else:
+                wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
+
+            # 结束tcp连接
+            client.send(json.dumps(packet.exit_rq()))
+            client.close()
+            client = None
+            return True
 
     def on_back(self, event=None):
         self.Hide()
@@ -261,18 +338,26 @@ class ChangePwdPanel(wx.Panel):
     # 向服务器发送登录请求
     def on_submit(self, event=None):
         new_pwd = self.new_password.GetValue()
-        flag, msg = change_pwd_handle(self.username, new_pwd, self.hash1)
-
-        # 提交成功
-        self.new_password.SetValue("")
-        self.confirm.SetValue("")
-        if flag:
-            wx.MessageBox("password has been changed!", "success", wx.OK | wx.ICON_INFORMATION)
-            self.Hide()
-            self.parent.success_panel.Show()
-            self.parent.Layout()
+        confirm = self.confirm.GetValue()
+        if new_pwd == '':
+            wx.MessageBox("password is empty!", "alert", wx.OK | wx.ICON_WARNING)
+        elif confirm == '':
+            wx.MessageBox("confirm is empty!", "alert", wx.OK | wx.ICON_WARNING)
+        elif new_pwd != confirm:
+            wx.MessageBox("confirm is wrong!", "alert", wx.OK | wx.ICON_WARNING)
         else:
-            wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
+            flag, msg = change_pwd_handle(self.username, new_pwd, self.hash1)
+
+            # 提交成功
+            self.new_password.SetValue("")
+            self.confirm.SetValue("")
+            if flag:
+                wx.MessageBox("password has been changed!", "success", wx.OK | wx.ICON_INFORMATION)
+                self.Hide()
+                self.parent.success_panel.Show()
+                self.parent.Layout()
+            else:
+                wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
 
     # 返回到主界面
     def on_back(self, event=None):
@@ -330,7 +415,3 @@ class MainApp(wx.App):
 if __name__ == '__main__':
     app = MainApp()
     app.MainLoop()
-
-    # user = User("lily", "123456")
-    # print(">: ", client.recv())
-    # login(user)
