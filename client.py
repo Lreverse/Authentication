@@ -9,7 +9,6 @@ import json
 import wx
 import binascii
 import datetime
-from Crypto.Util.Padding import pad, unpad
 
 SERVER_IP = "127.0.0.1"
 PORT = 8888
@@ -83,13 +82,13 @@ def change_pwd_handle(username: str, new_pwd: str, key: str):
     pack_type = rs["type"]
     match pack_type:
         case packet.CHANGE_PWD_RS_SUCCESS:
-            print("change success")
             return True, ""
         case packet.CHANGE_PWD_RS_ERROR:
-            print("error")
-            return False, "error"
+            msg = rs["msg"]
+            return False, msg
         case _:
-            pass
+            msg = "packet error"
+            return False, msg
 
 
 class IndexPanel(wx.Panel):
@@ -146,7 +145,7 @@ class LoginPanel(wx.Panel):
         global client
         client = tcpClient(SERVER_IP, PORT, BUFFER_SIZE)
         client.connect()
-        print(">: ", client.recv())
+        print("> ", client.recv())
 
         # 获取用户名密码并发送登录请求
         username = self.username.GetValue()
@@ -159,6 +158,7 @@ class LoginPanel(wx.Panel):
             # 发送成功
             self.parent.success_panel.username = username
             self.parent.success_panel.hash1 = user.hash1
+            self.parent.success_panel.info.SetLabel(f"Hello ^_^  {username}")
             self.Hide()
             self.parent.success_panel.Show()
             self.parent.Layout()
@@ -267,11 +267,12 @@ class ChangePwdPanel(wx.Panel):
         self.new_password.SetValue("")
         self.confirm.SetValue("")
         if flag:
+            wx.MessageBox("password has been changed!", "success", wx.OK | wx.ICON_INFORMATION)
             self.Hide()
             self.parent.success_panel.Show()
             self.parent.Layout()
         else:
-            pass
+            wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
 
     # 返回到主界面
     def on_back(self, event=None):

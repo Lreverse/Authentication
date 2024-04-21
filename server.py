@@ -42,7 +42,7 @@ def deal_data(data):
 
 def login_handle(data):
     """处理登录请求"""
-    print(">:  login_rq", data)
+    print(">  login_rq", data)
     username = data["username"]
     hash2 = data["hashcode"]
     mac = data["MAC"]
@@ -50,8 +50,11 @@ def login_handle(data):
     # 查询sql查找对应关系
     cursor = db.cursor()
     sql = f"select * from users where username = '{username}'"  # 查询
-    cursor.execute(sql)
-    result = cursor.fetchall()
+    try:
+        cursor.execute(sql)
+        result = cursor.fetchall()
+    except Exception as e:
+        print(f">  error: {e}")
 
     if not result:
         rs = packet.login_rs_error("user not exit")
@@ -80,7 +83,7 @@ def register_handle(data):
 
 def change_pwd_handle(data):
     """处理修改密码请求"""
-    print(">:  change_pwd_rq", data)
+    print(">  change_pwd_rq", data)
     new_cipher = data["new_cipher"]
     new_hash2 = data["new_hash2"]
     new_hash2_ver = encrypt.hash_salt(server.hash1.encode(), new_cipher.encode())
@@ -88,9 +91,22 @@ def change_pwd_handle(data):
     # 验证new_hash2，防止消息被篡改
     if new_hash2 == new_hash2_ver:
         # 验证成功，则使用hash1解密new_cipher，然后更新数据库
-        rs = packet.change_pwd_rs_success()
+        key_byte = binascii.unhexlify(server.hash1.encode())
+        new_cipher_byte = binascii.unhexlify(new_cipher.encode())
+        new_hash1 = encrypt.AES_Decode(key_byte, new_cipher_byte)
+
+        cursor = db.cursor()
+        sql = f"update users set password = '{new_hash1}' where username = '{server.username}'"
+        try:
+            cursor.execute(sql)
+            db.commit()
+            rs = packet.change_pwd_rs_success()
+        except Exception as e:
+            db.rollback()
+            print(f">  error: {e}")
+            rs = packet.change_pwd_rs_error(e)
     else:
-        rs = packet.change_pwd_rs_error()
+        rs = packet.change_pwd_rs_error("authentication failure")
     response_data = json.dumps(rs)
     server.send(response_data)
 
