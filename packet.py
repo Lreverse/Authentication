@@ -12,6 +12,7 @@ REGISTER_RS_ERROR = base + 6
 CHANGE_PWD_RQ = base + 7
 CHANGE_PWD_RS_SUCCESS = base + 8
 CHANGE_PWD_RS_ERROR = base + 9
+ERROR = base + 10
 
 
 def exit_rq():
@@ -89,6 +90,14 @@ def change_pwd_rs_success():
 def change_pwd_rs_error(msg=""):
     packet = {
         "type": CHANGE_PWD_RS_ERROR,
+        "msg": msg
+    }
+    return packet
+
+
+def error(msg=""):
+    packet = {
+        "type": ERROR,
         "msg": msg
     }
     return packet

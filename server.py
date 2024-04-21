@@ -22,10 +22,18 @@ db = pymysql.connect(
 )
 
 
+def write_log(msg: str):
+    """写入日志文件"""
+    with open("log/server_access.log", 'a') as f:
+        print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), msg, file=f)  # 写入文件
+
+
 def deal_data(data):
     """根据包格式调用对应的处理函数"""
     rq = json.loads(data)  # 先反序列化
     pack_type = rq["type"]
+    log_text = f"{server.client_addr[0]}:{server.client_addr[1]} {data}"
+    write_log(log_text)
     match pack_type:
         case packet.EXIT_RQ:
             return False
@@ -36,7 +44,9 @@ def deal_data(data):
         case packet.CHANGE_PWD_RQ:
             change_pwd_handle(rq)
         case _:
-            pass
+            rs = packet.error("unknown error")
+            response_data = json.dumps(rs)
+            server.send(response_data)
     return True
 
 
@@ -52,9 +62,9 @@ def login_handle(data):
     sql = f"select * from users where username = '{username}'"  # 查询
     try:
         cursor.execute(sql)
-        result = cursor.fetchall()
     except Exception as e:
         print(f">  error: {e}")
+    result = cursor.fetchall()
 
     if not result:
         rs = packet.login_rs_error("user not exists")
@@ -84,7 +94,7 @@ def register_handle(data):
 
     # rsa解密
     reg_code_byte = binascii.unhexlify(reg_code.encode())
-    reg_decode = encrypt.rsa_decode(reg_code_byte, "./server_key/private.pem")
+    reg_decode = encrypt.rsa_decode(reg_code_byte, "./key_server/private.pem")
     reg_info = reg_decode.split(":")
     username = reg_info[0]
     hash1 = reg_info[1]
@@ -94,9 +104,9 @@ def register_handle(data):
     sql = f"select * from users where username ='{username}'"
     try:
         cursor.execute(sql)
-        result = cursor.fetchall()
     except Exception as e:
         print(f">  error: {e}")
+    result = cursor.fetchall()
 
     if not result:
         # 不存在该用户，可以插入
@@ -115,7 +125,6 @@ def register_handle(data):
         rs = packet.register_rs_error("user already exists")
     response_data = json.dumps(rs)
     server.send(response_data)
-
 
 
 def change_pwd_handle(data):

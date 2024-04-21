@@ -31,6 +31,7 @@ class User(object):
 def login_handle(user):
     """登录认证处理函数"""
     # 发送登录请求
+    global client
     rq = packet.login_rq(user.username, user.mac, user.hash2)
     send_data = json.dumps(rq)  # 序列化
     client.send(send_data)
@@ -46,9 +47,8 @@ def login_handle(user):
             hash1_byte = binascii.unhexlify(user.hash1.encode())
             mac = encrypt.AES_Decode(hash1_byte, cipher_byte)
             if mac == user.mac:
-                with open('client_access.log', 'a') as f:
-                    print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username,
-                          file=f)  # 写入文件
+                with open('log/client_access.log', 'a') as f:
+                    print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username, file=f)  # 写入文件
             return True, ""
         case packet.LOGIN_RS_ERROR:
             msg = rs["msg"]
@@ -63,7 +63,7 @@ def login_handle(user):
 def register_handle(username, password):
     """注册处理函数"""
     hash1 = encrypt.hash_md5(username.encode(), password.encode())
-    reg_code = encrypt.rsa_encode(f"{username}:{hash1}".encode(), "./server_key/public.pem")
+    reg_code = encrypt.rsa_encode(f"{username}:{hash1}".encode(), "./key_server/public.pem")
 
     # 发送注册请求
     rq = packet.register_rq(reg_code)
@@ -76,10 +76,10 @@ def register_handle(username, password):
     pack_type = rs["type"]
     match pack_type:
         case packet.REGISTER_RS_SUCCESS:
-            print("register success")
+            # print("register success")
             return True, ""
         case packet.REGISTER_RS_ERROR:
-            print("register error")
+            # print("register error")
             msg = rs["msg"]
             return False, msg
         case _:
