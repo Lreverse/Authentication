@@ -15,7 +15,7 @@ PORT = 8888
 BUFFER_SIZE = 2048
 MAC_LENGTH = 16
 APP_TITLE = 'Authentication system'
-global client
+client = None
 
 
 class User(object):
@@ -141,20 +141,30 @@ class LoginPanel(wx.Panel):
 
     # 向服务器发送登录请求
     def on_login(self, event):
+        # 启动tcp客户端
+        global client
+        client = tcpClient(SERVER_IP, PORT, BUFFER_SIZE)
+        client.connect()
+        print(">: ", client.recv())
+
+        # 获取用户名密码并发送登录请求
         username = self.username.GetValue()
         password = self.password.GetValue()
         user = User(username, password)
         flag, msg = login_handle(user)
-        self.username.SetValue("")
-        self.password.SetValue("")
+        self.username.SetValue("")  # 重置输入框
+        self.password.SetValue("")  # 重置输入框
         if flag:
-            # 发送成功重置输入框内容为空
+            # 发送成功
             self.parent.success_panel.username = username
             self.parent.success_panel.hash1 = user.hash1
             self.Hide()
             self.parent.success_panel.Show()
             self.parent.Layout()
         else:
+            # 发送失败，结束tcp连接
+            client.send(json.dumps(packet.exit_rq()))
+            client.close()
             wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
 
     # 返回到主界面
@@ -233,7 +243,7 @@ class ChangePwdPanel(wx.Panel):
         self.username = None
         self.hash1 = None
 
-        self.info = wx.StaticText(self, -1, "input your pwd to change(˙Ꙫ˙)", pos=(70, 30), size=(250, -1),
+        self.info = wx.StaticText(self, -1, "input your pwd to change（˙Ꙫ˙）", pos=(70, 30), size=(250, -1),
                                   style=wx.ALIGN_CENTRE_HORIZONTAL)
         wx.StaticText(self, -1, "password", pos=(60, 70))
         wx.StaticText(self, -1, "confirm", pos=(60, 110))
@@ -252,7 +262,6 @@ class ChangePwdPanel(wx.Panel):
         # user = User(self.username, password)
         # change_pwd_handle(user)
         # 不需要重新生成用户，只需要把hash1当作密钥进行AES加密
-        
 
         # 提交成功
         self.password.SetValue("")
@@ -304,17 +313,13 @@ class MainApp(wx.App):
         self.SetAppName(APP_TITLE)
         self.frame = MainFrame()
         self.frame.Show()
-
-        # 启动tcp客户端
-        global client
-        client = tcpClient(SERVER_IP, PORT, BUFFER_SIZE)
-        client.connect()
-        print(">: ", client.recv())
         return True
 
     def OnExit(self):
-        client.send(json.dumps(packet.exit_rq()))
-        client.close()
+        global client
+        if client is not None:
+            client.send(json.dumps(packet.exit_rq()))
+            client.close()
         return 1
 
 
