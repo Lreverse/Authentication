@@ -71,6 +71,7 @@ def login_handle(data):
     else:
         server.username = result[0][1]
         server.hash1 = result[0][2]
+        first_login = result[0][3]
         hash2_ver = encrypt.hash_salt(server.hash1.encode(), mac.encode())
 
         # 验证hash2，防止消息被篡改
@@ -79,7 +80,7 @@ def login_handle(data):
             hash1_byte = binascii.unhexlify(server.hash1.encode())  # 将hash1转为字节流
             mac_byte = binascii.unhexlify(mac.encode())  # 将16进制的mac转换为字节流
             cipher = encrypt.AES_Encode(hash1_byte, mac_byte)  # AES加密mac，密钥为hash1
-            rs = packet.login_rs_success(cipher)
+            rs = packet.login_rs_success(cipher, first_login)
         else:
             # 验证失败，返回error信息
             rs = packet.login_rs_error("authentication failure")
@@ -110,7 +111,7 @@ def register_handle(data):
 
     if not result:
         # 不存在该用户，可以插入
-        sql = f"insert into users (username, password) values ('{username}', '{hash1}')"
+        sql = f"insert into users (username, password, first_login) values ('{username}', '{hash1}', true)"
         try:
             db.begin()
             cursor.execute(sql)
@@ -119,7 +120,7 @@ def register_handle(data):
         except Exception as e:
             db.rollback()
             print(f">  error: {e}")
-            rs = packet.register_rs_error(e)
+            rs = packet.register_rs_error(f"{e}")
     else:
         # 存在该用户
         rs = packet.register_rs_error("user already exists")
@@ -142,7 +143,7 @@ def change_pwd_handle(data):
         new_hash1 = encrypt.AES_Decode(key_byte, new_cipher_byte)
 
         cursor = db.cursor()
-        sql = f"update users set password = '{new_hash1}' where username = '{server.username}'"
+        sql = f"update users set password = '{new_hash1}', first_login = false where username = '{server.username}'"
         try:
             db.begin()
             cursor.execute(sql)
@@ -151,7 +152,7 @@ def change_pwd_handle(data):
         except Exception as e:
             db.rollback()
             print(f">  error: {e}")
-            rs = packet.change_pwd_rs_error(e)
+            rs = packet.change_pwd_rs_error(f"{e}")
     else:
         rs = packet.change_pwd_rs_error("authentication failure")
     response_data = json.dumps(rs)

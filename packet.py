@@ -32,10 +32,11 @@ def login_rq(username, mac, hash2):
     return packet
 
 
-def login_rs_success(cipher):
+def login_rs_success(cipher, first_login):
     packet = {
         "type": LOGIN_RS_SUCCESS,
-        "cipher": cipher
+        "cipher": cipher,
+        "first_login": first_login
     }
     return packet
 

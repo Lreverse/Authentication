@@ -46,10 +46,12 @@ def login_handle(user):
             cipher_byte = binascii.unhexlify(cipher.encode())
             hash1_byte = binascii.unhexlify(user.hash1.encode())
             mac = encrypt.AES_Decode(hash1_byte, cipher_byte)
+            first_login = rs["first_login"]
             if mac == user.mac:
                 with open('log/client_access.log', 'a') as f:
-                    print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username, file=f)  # 写入文件
-            return True, ""
+                    print(datetime.datetime.now().strftime('%Y-%m-%d  %H:%M:%S '), mac, '', user.username,
+                          file=f)  # 写入文件
+            return True, first_login
         case packet.LOGIN_RS_ERROR:
             msg = rs["msg"]
             # print(msg)
@@ -199,6 +201,12 @@ class LoginPanel(wx.Panel):
                 self.Hide()
                 self.parent.success_panel.Show()
                 self.parent.Layout()
+                if msg == 1:
+                    # 如果用户第一次登录，则需要强制用户修改密码
+                    wx.MessageBox("Please change your password as this is your first time logging in",
+                                  "alert", wx.OK | wx.ICON_INFORMATION)
+                    self.parent.success_panel.on_change_pwd()
+                    wx.Button.Disable(self.parent.change_pwd_panel.back_btn)
             else:
                 # 发送失败，结束tcp连接
                 client.send(json.dumps(packet.exit_rq()))
@@ -356,6 +364,7 @@ class ChangePwdPanel(wx.Panel):
                 self.Hide()
                 self.parent.success_panel.Show()
                 self.parent.Layout()
+                wx.Button.Enable(self.back_btn)
             else:
                 wx.MessageBox(msg, "alert", wx.OK | wx.ICON_WARNING)
 
