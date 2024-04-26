@@ -203,7 +203,7 @@ class LoginPanel(wx.Panel):
                 self.parent.Layout()
                 if msg == 1:
                     # 如果用户第一次登录，则需要强制用户修改密码
-                    wx.MessageBox("Please change your password as this is your first time logging in",
+                    wx.MessageBox("Please change your password as this is your first time logining in",
                                   "alert", wx.OK | wx.ICON_INFORMATION)
                     self.parent.success_panel.on_change_pwd()
                     wx.Button.Disable(self.parent.change_pwd_panel.back_btn)
